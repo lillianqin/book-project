@@ -3,7 +3,7 @@
 This is Lillian's repo for experimental OrderBook optimization.
 
 ```
-git checkout git@github.com:wqin2022/book-project.git
+git clone git@github.com:lillianqin/book-project.git
 cd book-project
 git submodule update --init --recursive
 ```
