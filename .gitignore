@@ -1,0 +1,13 @@
+# Ignore all
+*
+
+# Unignore all with extensions
+!*.*
+
+# Unignore all dirs
+!*/
+
+build/
+install/
+.cache/
+compile_commands.json

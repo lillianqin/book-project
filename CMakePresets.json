@@ -1,0 +1,62 @@
+{
+	"version": 8,
+	"configurePresets": [
+		{
+			"name": "default",
+			"hidden": true,
+			"displayName": "default configuration",
+			"description": "Using compilers: C = /usr/bin/gcc, CXX = /usr/bin/g++",
+			"binaryDir": "${sourceDir}/build/${presetName}",
+			"generator": "Ninja",
+			"cacheVariables": {
+				"CMAKE_INSTALL_PREFIX": "${sourceDir}/install/${presetName}"
+			}
+		},
+		{
+			"name": "debug",
+			"displayName": "Debug configuration with GCC",
+			"inherits": "default",
+			"cacheVariables": {
+				"CMAKE_CXX_COMPILER": "g++",
+				"CMAKE_BUILD_TYPE": "Debug"
+			}
+		},
+		{
+			"name": "release",
+			"displayName": "Release configuration with GCC",
+			"inherits": "default",
+			"cacheVariables": {
+				"CMAKE_CXX_COMPILER": "g++",
+				"CMAKE_BUILD_TYPE": "RelWithDebInfo"
+			}
+		}
+	],
+	"buildPresets": [
+		{
+			"name": "debug",
+			"displayName": "Build Debug all with GCC",
+			"configurePreset": "debug",
+			"configuration": "debug",
+			"targets": []
+		},
+		{
+			"name": "release",
+			"displayName": "Build Release all with GCC",
+			"configurePreset": "release",
+			"configuration": "release",
+			"targets": []
+		}
+	],
+	"testPresets": [
+		{
+			"name": "debug",
+			"displayName": "Run Debug all CTest",
+			"configurePreset": "debug"
+		},
+		{
+			"name": "release",
+			"displayName": "Run Release all CTest",
+			"configurePreset": "release"
+		}
+	]
+}
