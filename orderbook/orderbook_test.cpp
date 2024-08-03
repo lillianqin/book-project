@@ -64,7 +64,7 @@ TEST_CASE("Basic") {
   CHECK(level1->price == 100.0);
   CHECK(level1->totalShares == 100);
   CHECK(level1->numOrders() == 1);
-  CHECK(level1->front() == order1);
+  CHECK(&level1->front() == order1);
   CHECK(order1->refNum == ReferenceNum(1));
   CHECK(order1->quantity == 100);
   CHECK(order1->price == 100.0);
@@ -89,7 +89,7 @@ TEST_CASE("Basic") {
   CHECK(level2->price == 102.0);
   CHECK(level2->totalShares == 100);
   CHECK(level2->numOrders() == 1);
-  CHECK(level2->front() == order2);
+  CHECK(&level2->front() == order2);
   CHECK(order2->refNum == ReferenceNum(2));
   CHECK(order2->quantity == 100);
   CHECK(order2->price == 102.00);
@@ -108,7 +108,7 @@ TEST_CASE("Basic") {
   CHECK(level3->numOrders() == 1);
   auto order3 = book.findOrder(ReferenceNum(3));
   REQUIRE(order3 != nullptr);
-  CHECK(level3->front() == order3);
+  CHECK(&level3->front() == order3);
   CHECK(order3->refNum == ReferenceNum(3));
   CHECK(order3->quantity == 100);
   CHECK(order3->price == 101.00);
@@ -131,7 +131,7 @@ TEST_CASE("Basic") {
   CHECK(level4->numOrders() == 1);
   auto order4 = book.findOrder(ReferenceNum(4));
   REQUIRE(order4 != nullptr);
-  CHECK(level4->front() == order4);
+  CHECK(&level4->front() == order4);
   CHECK(order4->refNum == ReferenceNum(4));
   CHECK(order4->quantity == 100);
   CHECK(order4->price == 103.00);
@@ -147,13 +147,13 @@ TEST_CASE("Basic") {
 
   auto &half0 = book.half(CID(0), Side::Bid);
   REQUIRE(half0.size() == 2);
-  CHECK(half0.front() == level3);
-  CHECK(half0.back() == level1);
+  CHECK(&half0.front() == level3);
+  CHECK(&half0.back() == level1);
 
   auto &half1 = book.half(CID(1), Side::Ask);
   REQUIRE(half1.size() == 2);
-  CHECK(half1.front() == level2);
-  CHECK(half1.back() == level4);
+  CHECK(&half1.front() == level2);
+  CHECK(&half1.back() == level4);
 
   ExecInfo ei;
   book.executeOrder(ReferenceNum(1), /*Quantity*/ 10, ei, Timestamp{});
@@ -193,7 +193,7 @@ TEST_CASE("Basic") {
   CHECK(level5->price == 101.10);
   CHECK(level5->totalShares == 80);
   CHECK(level5->numOrders() == 1);
-  CHECK(level5->front() == order5);
+  CHECK(&level5->front() == order5);
   CHECK(order5->level == level5);
   CHECK(book.topLevel(CID(0), Side::Bid) == level5);
   CHECK(book.nthLevel(CID(0), Side::Bid, 0) == level5);
@@ -306,24 +306,24 @@ TEST_CASE("priority") {
   CHECK(level->price == 100.00);
   CHECK(level->totalShares == 500);
   CHECK(level->numOrders() == 5);
-  CHECK(level->front()->refNum == ReferenceNum(10));
-  CHECK(level->back()->refNum == ReferenceNum(50));
+  CHECK(level->front().refNum == ReferenceNum(10));
+  CHECK(level->back().refNum == ReferenceNum(50));
   auto oit = level->begin();
-  CHECK((*oit++)->refNum == ReferenceNum(10));
-  CHECK((*oit++)->refNum == ReferenceNum(20));
-  CHECK((*oit++)->refNum == ReferenceNum(30));
-  CHECK((*oit++)->refNum == ReferenceNum(40));
-  CHECK((*oit++)->refNum == ReferenceNum(50));
+  CHECK((*oit++).refNum == ReferenceNum(10));
+  CHECK((*oit++).refNum == ReferenceNum(20));
+  CHECK((*oit++).refNum == ReferenceNum(30));
+  CHECK((*oit++).refNum == ReferenceNum(40));
+  CHECK((*oit++).refNum == ReferenceNum(50));
   CHECK(oit == level->end());
 
   book.replaceOrder(ReferenceNum(20), ReferenceNum(22), 100, 100.00, Timestamp{});
   CHECK(level->numOrders() == 5);
   oit = level->begin();
-  CHECK((*oit++)->refNum == ReferenceNum(10));
-  CHECK((*oit++)->refNum == ReferenceNum(30));
-  CHECK((*oit++)->refNum == ReferenceNum(40));
-  CHECK((*oit++)->refNum == ReferenceNum(50));
-  CHECK((*oit++)->refNum == ReferenceNum(22));
+  CHECK((*oit++).refNum == ReferenceNum(10));
+  CHECK((*oit++).refNum == ReferenceNum(30));
+  CHECK((*oit++).refNum == ReferenceNum(40));
+  CHECK((*oit++).refNum == ReferenceNum(50));
+  CHECK((*oit++).refNum == ReferenceNum(22));
   CHECK(oit == level->end());
 
   book.deleteOrder(ReferenceNum(30), Timestamp{});
@@ -331,8 +331,8 @@ TEST_CASE("priority") {
   book.deleteOrder(ReferenceNum(50), Timestamp{});
   CHECK(level->numOrders() == 2);
   oit = level->begin();
-  CHECK((*oit++)->refNum == ReferenceNum(10));
-  CHECK((*oit++)->refNum == ReferenceNum(22));
+  CHECK((*oit++).refNum == ReferenceNum(10));
+  CHECK((*oit++).refNum == ReferenceNum(22));
   CHECK(book.validate());
 
   book.clearBook(CID(0));

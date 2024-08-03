@@ -4,13 +4,15 @@
 #include "FPPrice.h"
 #include "OrderCommon.h"
 #include "absl/log/log.h"
+#include <boost/intrusive/list.hpp>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <list>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+using namespace boost::intrusive;
 
 namespace bookproj {
 namespace orderbook {
@@ -35,8 +37,6 @@ struct Order {
 };
 
 enum class BookID : int32_t {};
-template <typename Order> using OrderList = std::list<Order>;
-template <typename Level> using LevelList = std::list<Level>;
 
 struct ExecInfo {
   uint64_t matchNum = 0;
@@ -76,11 +76,16 @@ public:
     // a back pointer to the level that has this order
     Level *level = nullptr;
 
+    list_member_hook<link_mode<normal_link>> hook;
+
   private:
-    // iterator of the order in the level's list, for O(1) removal of the order from the list.
-    typename OrderList<OrderExt *>::iterator levelIter;
     friend class OrderBook;
   };
+
+  using OrderList =
+      list<OrderExt,
+           member_hook<OrderExt, list_member_hook<link_mode<normal_link>>, &OrderExt::hook>,
+           constant_time_size<true>>;
 
   OrderBook(BookID id_) : bkid(id_) {};
   OrderBook(const OrderBook &) = delete;
@@ -152,29 +157,34 @@ public:
   struct Half;
 
   // price level for CID/side/price
-  struct Level : public OrderList<OrderExt *> {
-    Level(Half *half_, Price price_)
-        : price(price_), totalShares(0), half(half_), halfIter(half->insert(price, this)) {}
+  struct Level : public OrderList {
+    Level(Half *half_, Price price_) : price(price_), totalShares(0), half(half_) {
+      half->insert(price, this);
+    }
 
     Level(const Level &) = delete;
     Level &operator=(const Level &) = delete;
-    ~Level() { half->erase(halfIter); }
+    ~Level();
 
     Side side() const { return half->side; }
     CID cid() const { return half->cid; }
 
-    size_t numOrders() const { return OrderList<OrderExt *>::size(); }
+    size_t numOrders() const { return OrderList::size(); }
 
     Price price;
     Quantity totalShares;
 
     Half *half;
 
+    list_member_hook<link_mode<normal_link>> hook;
+
   private:
-    // iterator corresponding to this level in half's linked list
-    typename LevelList<Level *>::iterator halfIter;
     friend class OrderBook;
   };
+
+  using LevelList =
+      list<Level, member_hook<Level, list_member_hook<link_mode<normal_link>>, &Level::hook>,
+           constant_time_size<true>>;
 
   // custom hasher for price level in levels map
   struct LevelHash {
@@ -194,7 +204,7 @@ public:
   const Level *getLevel(CID cid, Side side, Price price) const;
 
   // one side of the book of a CID
-  struct Half : public LevelList<Level *> {
+  struct Half : public LevelList {
     Half(CID cid, Side side) : cid(cid), side(side) {}
     Half(const Half &) = delete;
     Half(Half &&) = default;
@@ -204,14 +214,13 @@ public:
     CID cid;
     Side side;
 
-    using ListType = LevelList<Level *>;
-    ListType::iterator insert(Price price, Level *level) {
-      auto iter = ListType::begin();
-      while (iter != ListType::end() && ((side == Side::Bid && (*iter)->price > price) ||
-                                         (side != Side::Bid && (*iter)->price < price))) {
+    LevelList::iterator insert(Price price, Level *level) {
+      auto iter = LevelList::begin();
+      while (iter != LevelList::end() && ((side == Side::Bid && (*iter).price > price) ||
+                                          (side != Side::Bid && (*iter).price < price))) {
         ++iter;
       }
-      return ListType::insert(iter, level);
+      return LevelList::insert(iter, *level);
     }
   };
 
@@ -286,6 +295,8 @@ private:
   std::unordered_map<std::tuple<CID, Side, Price>, Level, LevelHash> levels;
 }; // namespace bookproj
 
+inline OrderBook::Level::~Level() { half->erase(LevelList::s_iterator_to(*this)); }
+
 inline OrderBook::OrderExt *OrderBook::findOrder(ReferenceNum refNum) {
   auto it = orders.find(refNum);
   return it == orders.end() ? nullptr : &(it->second);
@@ -298,10 +309,9 @@ inline const OrderBook::OrderExt *OrderBook::findOrder(ReferenceNum refNum) cons
 
 inline void OrderBook::linkOrder(OrderExt *order) {
   Level *level = findOrCreateLevel(order->cid, order->side, order->price);
-  level->push_back(order);
+  level->push_back(*order);
   level->totalShares += order->quantity;
   order->level = level;
-  order->levelIter = std::prev(level->end());
   if (++orderCount > maxOrderCount) {
     maxOrderCount = orderCount;
   }
@@ -309,13 +319,12 @@ inline void OrderBook::linkOrder(OrderExt *order) {
 
 inline void OrderBook::unlinkOrder(OrderExt *order) {
   Level *level = order->level;
-  level->erase(order->levelIter);
+  level->erase(OrderList::s_iterator_to(*order));
   level->totalShares -= order->quantity;
   if (level->empty()) {
     assert(level->totalShares == 0);
     destroyLevel(level);
     order->level = nullptr;
-    order->levelIter = {};
   }
   --orderCount;
 }
@@ -540,9 +549,9 @@ inline void OrderBook::clear(CID cid, bool callListeners) {
   auto &book = books[toUnderlying(cid)];
   for (auto &half : book.halves) {
     for (size_t numLevels = half.size(); numLevels; --numLevels) {
-      Level *level = half.front();
+      Level *level = &half.front();
       for (size_t numOrders = level->size(); numOrders; --numOrders) {
-        OrderExt *order = level->front();
+        OrderExt *order = &level->front();
         unlinkOrder(order);
         if (callListeners) {
           for (auto &listener : listeners) {
@@ -575,7 +584,7 @@ inline const OrderBook::Level *OrderBook::topLevel(CID cid, Side side) const {
   assert(toUnderlying(cid) >= 0 && std::cmp_less(toUnderlying(cid), books.size()));
   const auto &book = books[toUnderlying(cid)];
   const auto &half = book.halves[side != Side::Bid];
-  return half.empty() ? nullptr : half.front();
+  return half.empty() ? nullptr : &half.front();
 }
 
 // get n-th best level for cid/side, nullptr if not enough levels
@@ -588,7 +597,7 @@ inline const OrderBook::Level *OrderBook::nthLevel(CID cid, Side side, size_t n)
   }
   auto iter = half.begin();
   std::advance(iter, n);
-  return *iter;
+  return &(*iter);
 }
 
 inline const OrderBook::Level *OrderBook::getLevel(CID cid, Side side, Price price) const {
@@ -612,20 +621,20 @@ inline bool OrderBook::validate(CID cid) const {
   const auto &book = books[toUnderlying(cid)];
   const auto &bidHalf = book.halves[0];
   if (!std::is_sorted(bidHalf.begin(), bidHalf.end(),
-                      [](auto a, auto b) { return a->price > b->price; })) {
+                      [](auto &a, auto &b) { return a.price > b.price; })) {
     LOG(ERROR) << "Bid levels are not ordered by price for half: " << getHalfString(bidHalf);
     success = false;
   }
   const auto &askHalf = book.halves[1];
   if (!std::is_sorted(askHalf.begin(), askHalf.end(),
-                      [](auto a, auto b) { return a->price < b->price; })) {
+                      [](auto &a, auto &b) { return a.price < b.price; })) {
     LOG(ERROR) << "Ask levels are not ordered by price for half: " << getHalfString(askHalf);
     success = false;
   }
 
   for (auto &half : book.halves) {
-    for (auto iter = half.begin(); iter != half.end(); ++iter) {
-      const Level *level = *iter;
+    for (auto &levelref : half) {
+      const Level *level = &levelref;
       if (level->half != &half) {
         LOG(ERROR) << "Level half mismatch, level: " << getLevelString(*level)
                    << ", half: " << getHalfString(half);
@@ -637,7 +646,8 @@ inline bool OrderBook::validate(CID cid) const {
       }
 
       Quantity totalShares = 0;
-      for (auto order : *level) {
+      for (const auto &oref : *level) {
+        auto order = &oref;
         if (order->level != level || order->cid != cid || order->side != level->side() ||
             order->price != level->price) {
           LOG(ERROR) << "Order level mismatch, order: " << toUnderlying(cid) << ", "
@@ -698,7 +708,7 @@ inline bool OrderBook::validate() const {
     for (auto &half : book.halves) {
       totalLevels += half.size();
       for (auto &level : half) {
-        totalOrders += level->size();
+        totalOrders += level.size();
       }
     }
   }

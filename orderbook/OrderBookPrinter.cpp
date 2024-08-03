@@ -10,7 +10,7 @@ PrintParams inferPrintParams(const OrderBook::Half &half, int depth,
   static_assert(IntegerLike<size_t>);
   int nlevel = 0;
   for (auto iter = half.begin(); iter != half.end() && nlevel < depth; ++iter, ++nlevel) {
-    auto level = *iter;
+    auto level = &(*iter);
     params.orderWidth = std::max(params.orderWidth, detail::integerWidth(level->size()));
     params.quantityWidth =
         std::max(params.quantityWidth, detail::integerWidth(level->totalShares));
@@ -55,7 +55,7 @@ std::vector<std::string> printLevels(const OrderBook &order_book, CID cid, int d
   for (int i = 0; i < depth; ++i) {
     std::string line;
     if (bidIter != bids.end()) {
-      auto level = *bidIter;
+      auto level = &(*bidIter);
       line = std::format("({:>{}}) {:>{}} {:>{}}", level->numOrders(), params.orderWidth,
                          toUnderlying(level->totalShares), params.quantityWidth,
                          fmtPrice(level->price), params.priceWidth);
@@ -64,7 +64,7 @@ std::vector<std::string> printLevels(const OrderBook &order_book, CID cid, int d
       line = std::string(params.orderWidth + params.quantityWidth + params.priceWidth + 4, ' ');
     }
     if (askIter != asks.end()) {
-      auto level = *askIter;
+      auto level = &(*askIter);
       line +=
           std::format("{:{}}{:<{}} {:<{}} ({:<{}})", ' ', params.bidAskSpaces,
                       fmtPrice(level->price), params.priceWidth, toUnderlying(level->totalShares),

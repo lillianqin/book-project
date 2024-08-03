@@ -39,3 +39,4 @@ maxNumOrders=1924078, maxNumLevels=784060
 ```
 
 In total, above run took 181.66 seconds user time.  The goal is to reduce the time with better data structures for the book.
+- this becomes 153.39 after switching OrderList to intrusive linked list btw
