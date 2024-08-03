@@ -1,14 +1,13 @@
 #pragma once
 
 #include "CIndex.h"
-#include "FPPrice.h"
 #include "OrderCommon.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/log/log.h"
 #include <boost/intrusive/list.hpp>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -66,6 +65,7 @@ struct BookListener {
 // the bid side, the highest priced order is at the front. For the ask side, the lowest priced
 // order is at the front.  Each level is a linked list of orders, sorted by the time they are added
 // to the book. Orders are inserted, deleted, or modified (reduced, executed or replaced).
+
 class OrderBook {
 public:
   struct Level;
@@ -186,13 +186,16 @@ public:
       list<Level, member_hook<Level, list_member_hook<link_mode<normal_link>>, &Level::hook>,
            constant_time_size<true>>;
 
-  // custom hasher for price level in levels map
-  struct LevelHash {
-    size_t operator()(std::tuple<CID, Side, Price> key) const {
-      return (std::hash<CID>()(std::get<0>(key)) << 40) ^
-             (std::hash<Side>()(std::get<1>(key)) << 60) ^ std::hash<Price>()(std::get<2>(key));
+  struct LevelKey {
+    CID cid;
+    Side side;
+    Price price;
+    LevelKey(CID cid_, Side side_, Price price_) : cid(cid_), side(side_), price(price_) {};
+    bool operator==(const LevelKey &lk) const = default;
+    template <typename H> friend H AbslHashValue(H h, const LevelKey &lk) {
+      return H::combine(std::move(h), lk.cid, lk.side, lk.price);
     }
-  }; // namespace orderbook
+  };
 
   // get the best level for cid/side, nullptr if empty
   const Level *topLevel(CID cid, Side side) const;
@@ -289,22 +292,22 @@ private:
   size_t maxLevelCount = 0;
 
   // map of order objects
-  std::unordered_map<ReferenceNum, OrderExt> orders;
+  absl::flat_hash_map<ReferenceNum, OrderExt *, absl::Hash<ReferenceNum>> orders;
 
   // map of level objects
-  std::unordered_map<std::tuple<CID, Side, Price>, Level, LevelHash> levels;
+  absl::flat_hash_map<LevelKey, Level *> levels;
 }; // namespace bookproj
 
 inline OrderBook::Level::~Level() { half->erase(LevelList::s_iterator_to(*this)); }
 
 inline OrderBook::OrderExt *OrderBook::findOrder(ReferenceNum refNum) {
   auto it = orders.find(refNum);
-  return it == orders.end() ? nullptr : &(it->second);
+  return it == orders.end() ? nullptr : it->second;
 }
 
 inline const OrderBook::OrderExt *OrderBook::findOrder(ReferenceNum refNum) const {
   auto it = orders.find(refNum);
-  return it == orders.end() ? nullptr : &(it->second);
+  return it == orders.end() ? nullptr : it->second;
 }
 
 inline void OrderBook::linkOrder(OrderExt *order) {
@@ -331,22 +334,27 @@ inline void OrderBook::unlinkOrder(OrderExt *order) {
 
 inline OrderBook::OrderExt *OrderBook::createOrder(ReferenceNum refNum, CID cid, Side side,
                                                    Quantity quantity, Price price, Timestamp tm) {
-  auto [iter, inserted] = orders.try_emplace(refNum, refNum, cid, side, quantity, price, tm);
-  OrderExt *order = &(iter->second);
+  auto [iter, inserted] = orders.try_emplace(refNum, nullptr);
   if (!inserted) {
     LOG(WARNING) << "Order with refNum " << toUnderlying(refNum)
                  << " already exists, deleting old one and creating new one";
+    OrderExt *order = iter->second;
     unlinkOrder(order);
     for (auto &listener : listeners) {
       listener->onDeleteOrder(id(), order, order->quantity);
     }
     order->~OrderExt();
     order = new (order) OrderExt(refNum, cid, side, quantity, price, tm);
+  } else {
+    iter->second = new OrderExt(refNum, cid, side, quantity, price, tm);
   }
-  return order;
+  return iter->second;
 }
 
-inline void OrderBook::destroyOrder(OrderExt *order) { orders.erase(order->refNum); }
+inline void OrderBook::destroyOrder(OrderExt *order) {
+  orders.erase(order->refNum);
+  delete order;
+}
 
 inline OrderBook::OrderExt *OrderBook::newOrder(ReferenceNum refNum, CID cid, Side side,
                                                 Quantity quantity, Price price, Timestamp tm) {
@@ -531,17 +539,19 @@ inline OrderBook::Level *OrderBook::findOrCreateLevel(CID cid, Side side, Price 
   auto &book = books[toUnderlying(cid)];
   auto &half = book.halves[side != Side::Bid];
 
-  auto [iter, inserted] = levels.try_emplace(std::make_tuple(cid, side, price), &half, price);
+  auto [iter, inserted] = levels.try_emplace(LevelKey(cid, side, price), nullptr);
   if (inserted) {
+    iter->second = new Level(&half, price);
     if (levels.size() > maxLevelCount) {
       maxLevelCount = levels.size();
     }
   }
-  return &iter->second;
+  return iter->second;
 }
 
 inline void OrderBook::destroyLevel(Level *level) {
-  levels.erase(std::make_tuple(level->cid(), level->side(), level->price));
+  levels.erase(LevelKey(level->cid(), level->side(), level->price));
+  delete level;
 }
 
 inline void OrderBook::clear(CID cid, bool callListeners) {
@@ -601,8 +611,8 @@ inline const OrderBook::Level *OrderBook::nthLevel(CID cid, Side side, size_t n)
 }
 
 inline const OrderBook::Level *OrderBook::getLevel(CID cid, Side side, Price price) const {
-  auto iter = levels.find(std::make_tuple(cid, side, price));
-  return iter == levels.end() ? nullptr : &iter->second;
+  auto iter = levels.find(LevelKey(cid, side, price));
+  return iter == levels.end() ? nullptr : iter->second;
 }
 
 inline std::string OrderBook::getLevelString(const Level &level) {
@@ -661,9 +671,9 @@ inline bool OrderBook::validate(CID cid) const {
         if (auto oit = orders.find(order->refNum); oit == orders.end()) {
           LOG(ERROR) << "Order not found in orders map, " << order->toString();
           success = false;
-        } else if (&(oit->second) != order) {
+        } else if (oit->second != order) {
           LOG(ERROR) << "Order is not the same as in orders map, order: " << order->toString()
-                     << ", in order map: " << oit->second.toString();
+                     << ", in order map: " << oit->second->toString();
           success = false;
         }
         totalShares += order->quantity;
@@ -691,14 +701,14 @@ inline bool OrderBook::validate() const {
     success = false;
   }
   for (auto &order : orders) {
-    if (order.second.level == nullptr) {
-      LOG(ERROR) << "Order is not linked, " << order.second.toString();
+    if (order.second->level == nullptr) {
+      LOG(ERROR) << "Order is not linked, " << order.second->toString();
       success = false;
     }
   }
   for (auto &level : levels) {
-    if (level.second.empty()) {
-      LOG(ERROR) << "Level is not linked, " << getLevelString(level.second);
+    if (level.second->empty()) {
+      LOG(ERROR) << "Level is not linked, " << getLevelString(*level.second);
       success = false;
     }
   }

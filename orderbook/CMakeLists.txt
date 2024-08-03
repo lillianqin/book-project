@@ -5,12 +5,12 @@ target_include_directories(orderbook
                            INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}
                            )
 set_target_properties(orderbook PROPERTIES LINKER_LANGUAGE CXX)
-target_link_libraries(orderbook absl::log)
+target_link_libraries(orderbook absl::log absl::flat_hash_map)
 
 add_executable(orderbook_test orderbook_test.cpp)
 target_link_libraries(orderbook_test orderbook Catch2::Catch2)
-target_compile_options(orderbook_test PRIVATE "-fsanitize=address,undefined")
-target_link_options(orderbook_test PRIVATE "-fsanitize=address,undefined")
+target_compile_options(orderbook_test PRIVATE)
+target_link_options(orderbook_test PRIVATE)
 
 add_executable(symbol_test symbol_test.cpp)
 target_link_libraries(symbol_test orderbook Catch2::Catch2WithMain)
