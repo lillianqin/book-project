@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <fcntl.h>
 #include <iostream>
+#include <mimalloc.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -244,6 +245,7 @@ Timestamp::duration parseStringToDuration(const std::string &str) {
 }
 
 int main(int argc, char *argv[]) {
+  mi_option_set(mi_option_allow_large_os_pages, 1);
   absl::SetProgramUsageMessage("Utility to print nasdaq itch50 books for given date");
 
   auto remains = absl::ParseCommandLine(argc, argv);

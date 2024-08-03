@@ -1,3 +1,9 @@
 [submodule "3party/abseil-cpp"]
 	path = 3party/abseil-cpp
 	url = https://github.com/abseil/abseil-cpp.git
+[submodule "mimalloc"]
+	path = mimalloc
+	url = https://github.com/microsoft/mimalloc
+[submodule "3party/mimalloc"]
+	path = 3party/mimalloc
+	url = https://github.com/microsoft/mimalloc

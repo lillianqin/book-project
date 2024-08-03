@@ -26,7 +26,7 @@ target_link_libraries(itchraw_printer itch50 message bookproj_compiler_flags)
 target_compile_options(itchraw_printer PRIVATE "-Werror;-Wall")
 
 add_executable(itchbook_printer itch50OrderBookPrinter.cpp)
-target_link_libraries(itchbook_printer bookproj_compiler_flags itch50 orderbook absl::flags_parse)
+target_link_libraries(itchbook_printer bookproj_compiler_flags itch50 orderbook absl::flags_parse mimalloc-static)
 target_compile_options(itchbook_printer PRIVATE "-Werror;-Wall")
 #IPO/LTP causes significant slowdown here, so turn off
 #set_property(TARGET itchbook_printer PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
