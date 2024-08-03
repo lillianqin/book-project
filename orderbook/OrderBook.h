@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CIndex.h"
+#include "ObjectPool.h"
 #include "OrderCommon.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/log.h"
@@ -100,6 +101,8 @@ public:
     books.reserve(cidSize);
     orders.reserve(orderMapSize);
     levels.reserve(levelMapSize);
+    orderPool.reserve(orderMapSize);
+    levelPool.reserve(levelMapSize);
   }
 
   // add a listener
@@ -296,6 +299,9 @@ private:
 
   // map of level objects
   absl::flat_hash_map<LevelKey, Level *> levels;
+
+  ObjectPool<OrderExt> orderPool;
+  ObjectPool<Level> levelPool;
 }; // namespace bookproj
 
 inline OrderBook::Level::~Level() { half->erase(LevelList::s_iterator_to(*this)); }
@@ -346,14 +352,14 @@ inline OrderBook::OrderExt *OrderBook::createOrder(ReferenceNum refNum, CID cid,
     order->~OrderExt();
     order = new (order) OrderExt(refNum, cid, side, quantity, price, tm);
   } else {
-    iter->second = new OrderExt(refNum, cid, side, quantity, price, tm);
+    iter->second = orderPool.create(refNum, cid, side, quantity, price, tm);
   }
   return iter->second;
 }
 
 inline void OrderBook::destroyOrder(OrderExt *order) {
   orders.erase(order->refNum);
-  delete order;
+  orderPool.destroy(order);
 }
 
 inline OrderBook::OrderExt *OrderBook::newOrder(ReferenceNum refNum, CID cid, Side side,
@@ -541,7 +547,7 @@ inline OrderBook::Level *OrderBook::findOrCreateLevel(CID cid, Side side, Price 
 
   auto [iter, inserted] = levels.try_emplace(LevelKey(cid, side, price), nullptr);
   if (inserted) {
-    iter->second = new Level(&half, price);
+    iter->second = levelPool.create(&half, price);
     if (levels.size() > maxLevelCount) {
       maxLevelCount = levels.size();
     }
@@ -551,7 +557,7 @@ inline OrderBook::Level *OrderBook::findOrCreateLevel(CID cid, Side side, Price 
 
 inline void OrderBook::destroyLevel(Level *level) {
   levels.erase(LevelKey(level->cid(), level->side(), level->price));
-  delete level;
+  levelPool.destroy(level);
 }
 
 inline void OrderBook::clear(CID cid, bool callListeners) {

@@ -1,6 +1,6 @@
 find_package(Catch2 3 REQUIRED)
 
-add_library(orderbook STATIC OrderBook.h FPPrice.h CIndex.h Symbol.h OrderCommon.h OrderBookPrinter.h OrderBookPrinter.cpp)
+add_library(orderbook STATIC OrderBook.h FPPrice.h CIndex.h Symbol.h OrderCommon.h OrderBookPrinter.h OrderBookPrinter.cpp ObjectPool.h)
 target_include_directories(orderbook
                            INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}
                            )
