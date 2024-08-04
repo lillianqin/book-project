@@ -18,6 +18,9 @@ struct StockLocate {
   constexpr explicit operator uint16_t() const { return val; }
   static StockLocate invalid() { return StockLocate(0); }
   auto operator<=>(const StockLocate &rhs) const = default;
+  template <typename H> friend H AbslHashValue(H h, const StockLocate &sl) {
+    return H::combine(std::move(h), sl.val);
+  }
 
 private:
   uint16_t val;
@@ -66,11 +69,7 @@ struct StockLocateMap {
   }
 
 private:
-  struct LocateHash {
-    using is_avalanching = void;
-    uint64_t operator()(StockLocate x) const noexcept { return uint16_t(x); }
-  };
-  std::unordered_map<StockLocate, orderbook::CID, LocateHash> locate2CID;
+  absl::flat_hash_map<StockLocate, orderbook::CID> locate2CID;
   std::vector<StockLocate> cid2Locate;
 };
 
