@@ -43,3 +43,4 @@ In total, above run took 181.66 seconds user time.  The goal is to reduce the ti
 - down to 129.35 after enabling large pages
 - use absl::flat_hash_map with pointer value becomes 107.6
 - using ObjectPool.h for creation and deletion -> 95 seconds ish
+- added a btree map to make inserting new levels faster -> 73 seconds

@@ -3,6 +3,7 @@
 #include "CIndex.h"
 #include "ObjectPool.h"
 #include "OrderCommon.h"
+#include "absl/container/btree_map.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/log.h"
 #include <boost/intrusive/list.hpp>
@@ -189,6 +190,20 @@ public:
       list<Level, member_hook<Level, list_member_hook<link_mode<normal_link>>, &Level::hook>,
            constant_time_size<true>>;
 
+  struct LevelCompare {
+    Side side;
+    LevelCompare(Side s) : side(s) {}
+    bool operator()(Price left, Price right) const {
+      if (side == Side::Ask) {
+        return left < right;
+      } else {
+        return left > right;
+      }
+    }
+  };
+
+  using LevelMap = absl::btree_map<Price, Level *, LevelCompare>;
+
   struct LevelKey {
     CID cid;
     Side side;
@@ -211,7 +226,7 @@ public:
 
   // one side of the book of a CID
   struct Half : public LevelList {
-    Half(CID cid, Side side) : cid(cid), side(side) {}
+    Half(CID cid, Side side) : cid(cid), side(side), sortedLevels(LevelCompare(side)) {}
     Half(const Half &) = delete;
     Half(Half &&) = default;
     Half &operator=(const Half &) = delete;
@@ -220,13 +235,16 @@ public:
     CID cid;
     Side side;
 
+    LevelMap sortedLevels;
+
     LevelList::iterator insert(Price price, Level *level) {
-      auto iter = LevelList::begin();
-      while (iter != LevelList::end() && ((side == Side::Bid && (*iter).price > price) ||
-                                          (side != Side::Bid && (*iter).price < price))) {
-        ++iter;
+      auto [iter, inserted] = sortedLevels.emplace(price, level);
+      iter++;
+      if (iter == sortedLevels.end()) {
+        LevelList::push_back(*level);
+        return LevelList::s_iterator_to(*level);
       }
-      return LevelList::insert(iter, *level);
+      return LevelList::insert(LevelList::s_iterator_to(*iter->second), *level);
     }
   };
 
@@ -304,7 +322,10 @@ private:
   ObjectPool<Level> levelPool;
 }; // namespace bookproj
 
-inline OrderBook::Level::~Level() { half->erase(LevelList::s_iterator_to(*this)); }
+inline OrderBook::Level::~Level() {
+  half->erase(LevelList::s_iterator_to(*this));
+  half->sortedLevels.erase(price);
+}
 
 inline OrderBook::OrderExt *OrderBook::findOrder(ReferenceNum refNum) {
   auto it = orders.find(refNum);
