@@ -3,8 +3,9 @@
 #include "CIndex.h"
 #include "ObjectPool.h"
 #include "OrderCommon.h"
-#include "absl/container/flat_hash_map.h"
+#include "absl/hash/hash.h"
 #include "absl/log/log.h"
+#include "hash/emhash7.h"
 #include "tlx/container/btree_map.hpp"
 #include <boost/intrusive/list.hpp>
 #include <cassert>
@@ -300,10 +301,10 @@ private:
   size_t maxLevelCount = 0;
 
   // map of order objects
-  absl::flat_hash_map<ReferenceNum, OrderExt *, absl::Hash<ReferenceNum>> orders;
+  emhash7::HashMap<ReferenceNum, OrderExt *, absl::Hash<ReferenceNum>> orders;
 
   // map of level objects
-  absl::flat_hash_map<LevelKey, Level *> levels;
+  emhash7::HashMap<LevelKey, Level *, absl::Hash<LevelKey>> levels;
 
   ObjectPool<OrderExt> orderPool;
   ObjectPool<Level> levelPool;

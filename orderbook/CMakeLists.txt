@@ -5,7 +5,7 @@ target_include_directories(orderbook
                            INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}
                            )
 set_target_properties(orderbook PROPERTIES LINKER_LANGUAGE CXX)
-target_link_libraries(orderbook absl::log absl::flat_hash_map tlx)
+target_link_libraries(orderbook absl::log absl::hash tlx hash)
 
 add_executable(orderbook_test orderbook_test.cpp)
 target_link_libraries(orderbook_test orderbook Catch2::Catch2)

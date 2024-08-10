@@ -1,5 +1,7 @@
 #pragma once
 
+#include "absl/hash/hash.h"
+#include "hash/emhash7.h"
 #include "itch50.h"
 #include "orderbook/CIndex.h"
 #include "orderbook/OrderBook.h"
@@ -69,7 +71,7 @@ struct StockLocateMap {
   }
 
 private:
-  absl::flat_hash_map<StockLocate, orderbook::CID> locate2CID;
+  emhash7::HashMap<StockLocate, orderbook::CID, absl::Hash<StockLocate>> locate2CID;
   std::vector<StockLocate> cid2Locate;
 };
 

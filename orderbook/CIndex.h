@@ -1,14 +1,13 @@
 #pragma once
 
+#include "OrderCommon.h"
+#include "hash/emhash7.h"
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <utility>
 #include <vector>
-
-#include "OrderCommon.h"
-#include "absl/container/flat_hash_map.h"
 
 namespace bookproj {
 namespace orderbook {
@@ -58,7 +57,7 @@ template <typename Cid, typename SymT> struct CIndex {
 private:
   std::vector<SymT> cid2Symbol;
   // note invalid is always in symbol2Cid, so it is always 1-size bigger than cid2Symbol
-  absl::flat_hash_map<SymT, Cid, typename SymT::Hash> symbol2Cid;
+  emhash7::HashMap<SymT, Cid, typename SymT::Hash> symbol2Cid;
 };
 
 // The actual CID class. Most common usage is 32-bit.
