@@ -4,3 +4,6 @@
 [submodule "3party/mimalloc"]
 	path = 3party/mimalloc
 	url = https://github.com/microsoft/mimalloc
+[submodule "3party/tlx"]
+	path = 3party/tlx
+	url = https://github.com/tlx/tlx.git

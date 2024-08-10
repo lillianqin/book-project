@@ -3,9 +3,9 @@
 #include "CIndex.h"
 #include "ObjectPool.h"
 #include "OrderCommon.h"
-#include "absl/container/btree_map.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/log.h"
+#include "tlx/container/btree_map.hpp"
 #include <boost/intrusive/list.hpp>
 #include <cassert>
 #include <cstddef>
@@ -180,15 +180,9 @@ public:
 
     Half *half;
 
-    list_member_hook<link_mode<normal_link>> hook;
-
   private:
     friend class OrderBook;
   };
-
-  using LevelList =
-      list<Level, member_hook<Level, list_member_hook<link_mode<normal_link>>, &Level::hook>,
-           constant_time_size<true>>;
 
   struct LevelCompare {
     Side side;
@@ -202,7 +196,7 @@ public:
     }
   };
 
-  using LevelMap = absl::btree_map<Price, Level *, LevelCompare>;
+  using LevelMap = tlx::btree_map<Price, Level *, LevelCompare>;
 
   struct LevelKey {
     CID cid;
@@ -225,8 +219,8 @@ public:
   const Level *getLevel(CID cid, Side side, Price price) const;
 
   // one side of the book of a CID
-  struct Half : public LevelList {
-    Half(CID cid, Side side) : cid(cid), side(side), sortedLevels(LevelCompare(side)) {}
+  struct Half : public LevelMap {
+    Half(CID cid, Side side) : LevelMap(LevelCompare(side)), cid(cid), side(side) {}
     Half(const Half &) = delete;
     Half(Half &&) = default;
     Half &operator=(const Half &) = delete;
@@ -235,16 +229,9 @@ public:
     CID cid;
     Side side;
 
-    LevelMap sortedLevels;
-
-    LevelList::iterator insert(Price price, Level *level) {
-      auto [iter, inserted] = sortedLevels.emplace(price, level);
-      iter++;
-      if (iter == sortedLevels.end()) {
-        LevelList::push_back(*level);
-        return LevelList::s_iterator_to(*level);
-      }
-      return LevelList::insert(LevelList::s_iterator_to(*iter->second), *level);
+    LevelMap::iterator insert(Price price, Level *level) {
+      auto [iter, inserted] = LevelMap::insert2(price, level);
+      return iter;
     }
   };
 
@@ -322,10 +309,7 @@ private:
   ObjectPool<Level> levelPool;
 }; // namespace bookproj
 
-inline OrderBook::Level::~Level() {
-  half->erase(LevelList::s_iterator_to(*this));
-  half->sortedLevels.erase(price);
-}
+inline OrderBook::Level::~Level() { half->erase(price); }
 
 inline OrderBook::OrderExt *OrderBook::findOrder(ReferenceNum refNum) {
   auto it = orders.find(refNum);
@@ -586,7 +570,7 @@ inline void OrderBook::clear(CID cid, bool callListeners) {
   auto &book = books[toUnderlying(cid)];
   for (auto &half : book.halves) {
     for (size_t numLevels = half.size(); numLevels; --numLevels) {
-      Level *level = &half.front();
+      Level *level = half.begin()->second;
       for (size_t numOrders = level->size(); numOrders; --numOrders) {
         OrderExt *order = &level->front();
         unlinkOrder(order);
@@ -621,7 +605,7 @@ inline const OrderBook::Level *OrderBook::topLevel(CID cid, Side side) const {
   assert(toUnderlying(cid) >= 0 && std::cmp_less(toUnderlying(cid), books.size()));
   const auto &book = books[toUnderlying(cid)];
   const auto &half = book.halves[side != Side::Bid];
-  return half.empty() ? nullptr : &half.front();
+  return half.empty() ? nullptr : half.begin()->second;
 }
 
 // get n-th best level for cid/side, nullptr if not enough levels
@@ -634,7 +618,7 @@ inline const OrderBook::Level *OrderBook::nthLevel(CID cid, Side side, size_t n)
   }
   auto iter = half.begin();
   std::advance(iter, n);
-  return &(*iter);
+  return iter->second;
 }
 
 inline const OrderBook::Level *OrderBook::getLevel(CID cid, Side side, Price price) const {
@@ -658,20 +642,20 @@ inline bool OrderBook::validate(CID cid) const {
   const auto &book = books[toUnderlying(cid)];
   const auto &bidHalf = book.halves[0];
   if (!std::is_sorted(bidHalf.begin(), bidHalf.end(),
-                      [](auto &a, auto &b) { return a.price > b.price; })) {
+                      [](auto &a, auto &b) { return a.first > b.first; })) {
     LOG(ERROR) << "Bid levels are not ordered by price for half: " << getHalfString(bidHalf);
     success = false;
   }
   const auto &askHalf = book.halves[1];
   if (!std::is_sorted(askHalf.begin(), askHalf.end(),
-                      [](auto &a, auto &b) { return a.price < b.price; })) {
+                      [](auto &a, auto &b) { return a.first < b.first; })) {
     LOG(ERROR) << "Ask levels are not ordered by price for half: " << getHalfString(askHalf);
     success = false;
   }
 
   for (auto &half : book.halves) {
     for (auto &levelref : half) {
-      const Level *level = &levelref;
+      const Level *level = levelref.second;
       if (level->half != &half) {
         LOG(ERROR) << "Level half mismatch, level: " << getLevelString(*level)
                    << ", half: " << getHalfString(half);
@@ -745,7 +729,7 @@ inline bool OrderBook::validate() const {
     for (auto &half : book.halves) {
       totalLevels += half.size();
       for (auto &level : half) {
-        totalOrders += level.size();
+        totalOrders += level.second->size();
       }
     }
   }

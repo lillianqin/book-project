@@ -24,6 +24,7 @@ add_subdirectory(digest)
 set(ABSL_PROPAGATE_CXX_STD ON)
 add_subdirectory(3party/abseil-cpp)
 add_subdirectory(3party/mimalloc)
+add_subdirectory(3party/tlx)
 add_subdirectory(examples)
 
 add_dependencies(itch50 message orderbook datasource digest)

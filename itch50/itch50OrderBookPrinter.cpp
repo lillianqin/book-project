@@ -269,7 +269,7 @@ int main(int argc, char *argv[]) {
   book.reserve(65535, 4 << 20, 2 << 19);
   book.resize(CID(65535));
   static_assert(sizeof(Book::OrderExt) == 72);
-  static_assert(sizeof(Book::Level) == 64);
+  static_assert(sizeof(Book::Level) == 48);
 
   // quote/misc handlers use StockLocateMap to filter symbols
   StockLocateMap stockLocateMap;

@@ -147,13 +147,13 @@ TEST_CASE("Basic") {
 
   auto &half0 = book.half(CID(0), Side::Bid);
   REQUIRE(half0.size() == 2);
-  CHECK(&half0.front() == level3);
-  CHECK(&half0.back() == level1);
+  CHECK(half0.begin()->second == level3);
+  CHECK(half0.rbegin()->second == level1);
 
   auto &half1 = book.half(CID(1), Side::Ask);
   REQUIRE(half1.size() == 2);
-  CHECK(&half1.front() == level2);
-  CHECK(&half1.back() == level4);
+  CHECK(half1.begin()->second == level2);
+  CHECK(half1.rbegin()->second == level4);
 
   ExecInfo ei;
   book.executeOrder(ReferenceNum(1), /*Quantity*/ 10, ei, Timestamp{});
