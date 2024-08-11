@@ -187,14 +187,11 @@ public:
   };
 
   struct LevelCompare {
-    Side side;
-    LevelCompare(Side s) : side(s) {}
+    bool isBid;
+    bool isAsk;
+    LevelCompare(Side s) : isBid(s == Side::Bid), isAsk(!isBid) {}
     bool operator()(Price left, Price right) const {
-      if (side == Side::Ask) {
-        return left < right;
-      } else {
-        return left > right;
-      }
+      return (isAsk & (left < right)) | (isBid & (left > right));
     }
   };
 
@@ -350,7 +347,7 @@ inline void OrderBook::unlinkOrder(OrderExt *order) {
 inline OrderBook::OrderExt *OrderBook::createOrder(ReferenceNum refNum, CID cid, Side side,
                                                    Quantity quantity, Price price, Timestamp tm) {
   auto [iter, inserted] = orders.try_emplace(refNum, nullptr);
-  if (!inserted) {
+  if (!inserted) [[unlikely]] {
     LOG(WARNING) << "Order with refNum " << toUnderlying(refNum)
                  << " already exists, deleting old one and creating new one";
     OrderExt *order = iter->second;
@@ -386,7 +383,7 @@ inline void OrderBook::reduceOrderBy(OrderExt *order, Quantity changeQuantity, T
   Quantity oldQuantity = order->quantity;
   if (order->quantity <= changeQuantity) {
     unlinkOrder(order);
-    if (order->quantity < changeQuantity) {
+    if (order->quantity < changeQuantity) [[unlikely]] {
       LOG(WARNING) << "Order with refNum " << toUnderlying(order->refNum)
                    << " has less remaining quantity (" << order->quantity
                    << ") than reduceBy quantity (" << changeQuantity << ")";
@@ -409,7 +406,7 @@ inline void OrderBook::reduceOrderBy(OrderExt *order, Quantity changeQuantity, T
 }
 
 inline void OrderBook::reduceOrderBy(ReferenceNum refNum, Quantity changeQuantity, Timestamp ut) {
-  if (auto order = findOrder(refNum)) {
+  if (auto order = findOrder(refNum)) [[likely]] {
     reduceOrderBy(order, changeQuantity, ut);
   } else {
     LOG(WARNING) << "Order with refNum " << toUnderlying(refNum) << " not found in reduceBy";
@@ -423,7 +420,7 @@ inline void OrderBook::reduceOrderTo(OrderExt *order, Quantity newQuantity, Time
   }
 
   Quantity oldQuantity = order->quantity;
-  if (oldQuantity < newQuantity) {
+  if (oldQuantity < newQuantity) [[unlikely]] {
     LOG(WARNING) << "Order with refNum " << toUnderlying(order->refNum)
                  << " has less remaining quantity (" << oldQuantity << ") than reduceTo quantity ("
                  << newQuantity << "), increasing to new quantity";
@@ -437,7 +434,7 @@ inline void OrderBook::reduceOrderTo(OrderExt *order, Quantity newQuantity, Time
 }
 
 inline void OrderBook::reduceOrderTo(ReferenceNum refNum, Quantity newQuantity, Timestamp ut) {
-  if (auto order = findOrder(refNum)) {
+  if (auto order = findOrder(refNum)) [[likely]] {
     reduceOrderTo(order, newQuantity, ut);
   } else {
     LOG(WARNING) << "Order with refNum " << toUnderlying(refNum) << " not found in reduceTo";
@@ -483,7 +480,7 @@ inline OrderBook::OrderExt *OrderBook::replaceOrder(ReferenceNum oldRefNum, Refe
                                                     Quantity newQuantity, Price newPrice,
                                                     Timestamp tm) {
   // have to define this inline due to llvm bug
-  if (OrderExt *oldOrder = findOrder(oldRefNum)) {
+  if (OrderExt *oldOrder = findOrder(oldRefNum)) [[likely]] {
     return replaceOrder(oldOrder, newRefNum, newQuantity, newPrice, tm);
   } else {
     LOG(WARNING) << "Order with refNum " << toUnderlying(oldRefNum)
@@ -503,7 +500,7 @@ inline void OrderBook::deleteOrder(OrderExt *order, Timestamp ut) {
 
 inline void OrderBook::deleteOrder(ReferenceNum refNum, Timestamp ut) {
   // have to define this inline due to llvm bug
-  if (auto order = findOrder(refNum)) {
+  if (auto order = findOrder(refNum)) [[likely]] {
     deleteOrder(order, ut);
   } else {
     LOG(WARNING) << "Order with refNum " << toUnderlying(refNum) << " not found in deleteOrder";
@@ -516,7 +513,7 @@ inline void OrderBook::executeOrder(OrderExt *order, Quantity quantity, const Ex
   Quantity oldQuantity = order->quantity;
   if (order->quantity <= quantity) {
     unlinkOrder(order);
-    if (order->quantity < quantity) {
+    if (order->quantity < quantity) [[unlikely]] {
       LOG(WARNING) << "Order with refNum " << toUnderlying(order->refNum)
                    << " has less remaining quantity (" << order->quantity
                    << ") than execute quantity (" << quantity << ")";
@@ -543,7 +540,7 @@ inline void OrderBook::executeOrder(OrderExt *order, Quantity quantity, const Ex
 inline void OrderBook::executeOrder(ReferenceNum refNum, Quantity quantity, const ExecInfo &ei,
                                     Timestamp ut) {
   // have to define this inline due to llvm bug
-  if (auto order = findOrder(refNum)) {
+  if (auto order = findOrder(refNum)) [[likely]] {
     executeOrder(order, quantity, ei, ut);
   } else {
     LOG(WARNING) << "Order with refNum " << toUnderlying(refNum) << " not found in executeOrder";

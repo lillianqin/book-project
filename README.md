@@ -45,3 +45,4 @@ In total, above run took 181.66 seconds user time.  The goal is to reduce the ti
 - using ObjectPool.h for creation and deletion -> 95 seconds ish
 - added a btree map to make inserting new levels faster -> 73 seconds
 - switching to b+ tree and removing levels map -> 69 seconds, alternatively using a better hash map -> 58 seconds
+- getting rid of branching in LevelCompare -> 57 seconds
