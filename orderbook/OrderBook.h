@@ -5,6 +5,7 @@
 #include "OrderCommon.h"
 #include "absl/hash/hash.h"
 #include "absl/log/log.h"
+#include "ankerl/unordered_dense.h"
 #include "hash/emhash7.h"
 #include "tlx/container/btree_map.hpp"
 #include <boost/intrusive/list.hpp>
@@ -198,18 +199,20 @@ public:
   };
 
   using LevelMap = tlx::btree_map<Price, Level *, LevelCompare>;
+  using LevelKey = std::tuple<CID, Side, Price>;
 
-  struct LevelKey {
-    CID cid;
-    Side side;
-    Price price;
-    LevelKey(CID cid_, Side side_, Price price_) : cid(cid_), side(side_), price(price_) {};
-    bool operator==(const LevelKey &lk) const = default;
-    template <typename H> friend H AbslHashValue(H h, const LevelKey &lk) {
-      return H::combine(std::move(h), lk.cid, lk.side, lk.price);
-    }
-  };
-
+  /*
+    struct LevelKey {
+      CID cid;
+      Side side;
+      Price price;
+      LevelKey(CID cid_, Side side_, Price price_) : cid(cid_), side(side_), price(price_) {};
+      bool operator==(const LevelKey &lk) const = default;
+      template <typename H> friend H AbslHashValue(H h, const LevelKey &lk) {
+        return H::combine(std::move(h), lk.cid, lk.side, lk.price);
+      }
+    };
+  */
   // get the best level for cid/side, nullptr if empty
   const Level *topLevel(CID cid, Side side) const;
 
@@ -301,10 +304,10 @@ private:
   size_t maxLevelCount = 0;
 
   // map of order objects
-  emhash7::HashMap<ReferenceNum, OrderExt *, absl::Hash<ReferenceNum>> orders;
+  emhash7::HashMap<ReferenceNum, OrderExt *, ankerl::unordered_dense::hash<ReferenceNum>> orders;
 
   // map of level objects
-  emhash7::HashMap<LevelKey, Level *, absl::Hash<LevelKey>> levels;
+  emhash7::HashMap<LevelKey, Level *, ankerl::unordered_dense::hash<LevelKey>> levels;
 
   ObjectPool<OrderExt> orderPool;
   ObjectPool<Level> levelPool;

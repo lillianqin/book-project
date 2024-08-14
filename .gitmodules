@@ -7,3 +7,6 @@
 [submodule "3party/tlx"]
 	path = 3party/tlx
 	url = https://github.com/tlx/tlx.git
+[submodule "3party/unordered_dense"]
+	path = 3party/unordered_dense
+	url = https://github.com/martinus/unordered_dense.git
