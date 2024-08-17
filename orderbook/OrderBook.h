@@ -3,7 +3,6 @@
 #include "CIndex.h"
 #include "ObjectPool.h"
 #include "OrderCommon.h"
-#include "absl/hash/hash.h"
 #include "absl/log/log.h"
 #include "ankerl/unordered_dense.h"
 #include "hash/emhash7.h"
@@ -198,18 +197,6 @@ public:
   using LevelMap = tlx::btree_map<Price, Level *, LevelCompare>;
   using LevelKey = std::tuple<CID, Side, Price>;
 
-  /*
-    struct LevelKey {
-      CID cid;
-      Side side;
-      Price price;
-      LevelKey(CID cid_, Side side_, Price price_) : cid(cid_), side(side_), price(price_) {};
-      bool operator==(const LevelKey &lk) const = default;
-      template <typename H> friend H AbslHashValue(H h, const LevelKey &lk) {
-        return H::combine(std::move(h), lk.cid, lk.side, lk.price);
-      }
-    };
-  */
   // get the best level for cid/side, nullptr if empty
   const Level *topLevel(CID cid, Side side) const;
 

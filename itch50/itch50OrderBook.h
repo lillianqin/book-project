@@ -1,6 +1,6 @@
 #pragma once
 
-#include "absl/hash/hash.h"
+#include "ankerl/unordered_dense.h"
 #include "hash/emhash7.h"
 #include "itch50.h"
 #include "orderbook/CIndex.h"
@@ -20,9 +20,11 @@ struct StockLocate {
   constexpr explicit operator uint16_t() const { return val; }
   static StockLocate invalid() { return StockLocate(0); }
   auto operator<=>(const StockLocate &rhs) const = default;
-  template <typename H> friend H AbslHashValue(H h, const StockLocate &sl) {
-    return H::combine(std::move(h), sl.val);
-  }
+  struct Hash {
+    size_t operator()(StockLocate locate) const {
+      return ankerl::unordered_dense::hash<underlying_type>{}(locate.val);
+    }
+  };
 
 private:
   uint16_t val;
@@ -71,7 +73,7 @@ struct StockLocateMap {
   }
 
 private:
-  emhash7::HashMap<StockLocate, orderbook::CID, absl::Hash<StockLocate>> locate2CID;
+  emhash7::HashMap<StockLocate, orderbook::CID, StockLocate::Hash> locate2CID;
   std::vector<StockLocate> cid2Locate;
 };
 
