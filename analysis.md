@@ -36,7 +36,7 @@ To illustrate the scenarios, below is a snapshot from a book with only a few lev
 Suppose a market order was placed to sell 200 shares.
 First there is a trade with order 25, which only covers 100 shares.
 Order 27 has the next-best price, so the remaining 100 are taken from there.
-The market order fully executes immediately, so the sell side remains the same while bid side would look like this afterwards:
+The market order fully executes immediately, so the sell side remains the same while the bid side looks like this afterwards:
 | Level | Order # | Time    | Size | Bid Price |
 | ----- | ------- | ------- | ---- | --------- |
 | 1     | 27      | 2:38:10 | 200  | $114.98   |
@@ -69,7 +69,7 @@ I started out with an open-source order book implementation from github that use
 - An *Order* includes a reference number, stock ID, side, quantity, price, and create/update timestamps, plus an iterator pointing to its location in the *Level*’s linked list (also used to remove itself).
 
 *OrderBook* performs several frequent operations that have visible effects:
-- *newOrder*: adds a new order to the book. The operation looks in the level map for the level the order belongs to. If the appropriate level for its price is not present, a new one is created and inserted in the LevelList for its stock and side. The order is then appended to the end of that level, and added to the order map. Assuming most new orders join existing levels, this operation takes the same time as one lookup to the level map and one insertion to the order map, which is probably constant. In a degenerative case where the order is on a new level deep in the LevelList, time complexity is O(n) where n is the number of levels.
+- *newOrder*: adds a new order to the book. The operation looks in the level map for the level the order belongs to. If the appropriate level for its price is not present, a new one is created and inserted in the LevelList of its stock and side. The order is appended to the end of that level, then added to the order map. Assuming most new orders join existing levels, this operation takes the same time as one lookup to the level map and one insertion to the order map, which is probably constant. In a degenerative case where the order is on a new level deep in the LevelList, time complexity is O(n) where n is the number of levels.
 - *deleteOrder*: erases an order from the book. It first finds the order with the given reference number in the order map, then removes the order from the linked list of its level. If the level becomes empty, the level is removed from its half and from the level map, then destroyed. Then the order itself is removed from the order map and destroyed. deleteOrder is an O(1) operation assuming searching and erasing from the maps takes constant time. Erasing from linked lists must be O(1) since levels and orders “know” their own neighbors by storing iterators.
 - *replaceOrder*: changes the price and / or size of an existing order. First searches the order map to determine whether the original reference number is present. If so, it performs *deleteOrder*, followed by *newOrder* with a new reference number. This operation is thus linear with respect to the number of levels at worst.
 - *reduceOrder*: reduces the size of an existing order. Performs a lookup like *deleteOrder*, but changes the size field in-place instead, so it most likely takes constant time.
@@ -108,10 +108,10 @@ Memory access thus involves first looking up the virtual address in the page tab
 Since main memory is slow to access, the CPU also contains a small Translation Lookaside Buffer (TLB), usually between 16 and 512 entries, which caches recently looked up pages.
 
 A TLB miss occurs when the desired page is not found in the TLB.
-In that case, lookup is done on the page table and the newly-searched entry replaces one of the cached entries.
+In that case, lookup is done on the page table and the newly-searched entry replaces a cached entry.
 The more memory a process uses at the same time, the more TLB misses occur. According to *perf stat*, there are currently around 1.46 billion misses when running the benchmark.
 Performance thus improves if more addresses can be covered by the same number of TLB entries, and the most obvious way is increasing page size from the standard 4KB to a “huge page” with a larger memory block.
-There are multiple ways to increase page size without changing any code, such as enabling Linux’s Transparent HugePage Support.
+There are multiple ways to increase page size without changing any code, such as enabling Linux’s Transparent HugePage Support (detailed [here](https://linuxconfig.org/how-to-enable-hugepages-on-linux)).
 I chose to install Microsoft’s [mimalloc](https://github.com/microsoft/mimalloc) allocator since it is easier to configure.
 I enabled the *MIMALLOC_ALLOW_LARGE_OS_PAGES* option, which uses 2MB pages when available.
 There is also a 1GB option, though pages too large for the program’s needs may leave a lot of memory allocated but unused.
@@ -120,15 +120,15 @@ After enabling large pages, the number of TLB misses is reduced to about 5.6 mil
 ## Step 3: Flat Hash Map
 Insertion into a hash map involves calculating the result of the hash function, using the result to locate a bucket in the bucket table, checking that the key is not already present, and collision resolution in case multiple keys share the bucket.
 Chaining and open addressing are the two main ways to resolve collisions.
-In a chained hash map, each bucket contains a linked list or tree of colliding key/value pairs.
+In a chained hash map, each bucket contains a linked list or tree of colliding key/value pairs. 
+These are typically node-based data structures, which require heap allocation when inserting new elements (as mentioned in step 1).
 *std::unordered_map*s are of this variety, and as mentioned earlier *OrderBook* contains two: one from reference number to order, and another from index, side and price to level.
 These are used to create and destroy new elements before adding/removing from lists, and to find orders and levels in constant time.
 
 In contrast, open-addressed maps store only one element per bucket.
-In case of collision an alternative, empty bucket is found via linear or quadratic probing, putting the first result through a second hash function, or using a different hash function.
-Open addressing is often more efficient than chaining, which typically uses node-based structures for buckets.
-Inserting new elements would thus require heap allocation, as mentioned in Step 1.
-Another advantage of open addressing is that storing every element in one array is cache-friendly, since arrays are contiguous in memory.
+In case of collision, an alternative, empty bucket is found via linear or quadratic probing, putting the first result through a second hash function, or using a different hash function.
+Open addressing is often more efficient than chaining because there is no heap allocation involved.
+Another advantage is that storing every element in one array is cache-friendly, since arrays are contiguous in memory.
 However, open addressing is more sensitive to choice of hash function.
 
 One popular implementation of an open-addressed map is [*absl::flat_hash_map*](https://github.com/abseil/abseil-cpp), called “flat” since key-level pairs are stored directly inside the array.
@@ -144,7 +144,7 @@ When a program creates an object, it is constructed in one of the reserved chunk
 More space is only allocated once all the reserved chunks are in use.
 When an object is destroyed, the space it occupies is still reserved for creating another of the same object type.
 Reducing time spent on memory allocation makes this useful for large objects and those that are created and destroyed frequently (such as orders and levels).
-Net book-building time is now down to 87 seconds, down from 100 seconds.
+Net book-building time decreased from 100 to 87 seconds.
 
 ## Step 5: B-Tree Map
 *newOrder* remains the most time-consuming operation even after these optimizations.
@@ -153,23 +153,23 @@ Note that *Level*’s constructor automatically inserts it into a *Half* such th
 
 In this step, I added a [*tlx::btree_map*](https://tlx.github.io/index.html) from prices to levels (*LevelMap*) to each *Half*, reducing the insertion time to logarithmic.
 Like binary search trees, B-trees are used for sorting, but can have multiple elements and branches per node and are self-balancing.
-B-trees also have better cache performance than binary trees because elements in one node are stored contiguously, so it is better in that regard to have more than two elements per node.
+B-trees also have better cache performance than binary trees: elements in one node are stored contiguously, so it is better in that regard to have more than two elements per node.
 One type of B-tree is a B+ tree, in which internal nodes store only keys and leaf nodes store only values.
-The leaf nodes also connect to form a sorted linked list.
+The leaf nodes connect to form a sorted linked list.
 As *tlx::btree_map* is a B+ tree, it can replace the *LevelList* entirely.
 After this change, benchmark time decreased to 56 seconds, down from 87.
 
 ## Step 6: emhash7
-After Step 3, I learned that *absl::flat_has_map* isn’t actually the fastest flat hash map implementation around.
+After Step 3, I learned that *absl::flat_hash_map* isn’t actually the fastest flat hash map implementation around.
 According to [Martin Ankerl’s benchmarking](https://martin.ankerl.com/2022/08/27/hashmap-bench-01/), one of the best maps for inserting and deleting numbers (the most frequent operations in *OrderBook*) is [*emhash7::HashMap*](https://github.com/ktprime/emhash), particularly when using the [*ankerl::unordered_dense::hash*](https://github.com/martinus/unordered_dense) or the mumx hash.
-I replaced the *flat_has_maps* with this version, reducing time from 56 to 49 seconds.
+I replaced the *flat_hash_maps* with this version, reducing time from 56 to 49 seconds.
 
 ## Step 7: Branchless LevelCompare
 When code contains branches/conditional statements, the CPU will attempt to predict which branch is taken (ex. by frequency of each branch in the past), then fetch and speculatively execute the instructions that follow.
 If the prediction is wrong, those instructions need to be flushed from the CPU pipeline, incurring a misprediction penalty.
 According to *perf stat*, there are currently 18.9 billion branches when running the benchmark, of which about 800.5 million are mispredicted.
 
-Each *LevelMap* contains a *LevelCompare* struct that maintains its sorted order.
+Each *LevelMap* contain a *LevelCompare* struct that maintains its sorted order.
 It has a custom less-than operator which returns a different value depending on the *LevelMap*’s side, since the ask and bid sides are sorted in different directions:
 ```
 struct LevelCompare {
@@ -195,7 +195,7 @@ struct LevelCompare {
    }
 };
 ```
-As this is a local change affecting a small part of the program, the improvement is not as significant as the other steps. There is still a net improvement in performance, reducing runtime to 48 seconds from 49 seconds.
+As this is a local change affecting a small part of the program, the improvement is not as significant as the other steps. There is still a net improvement in performance, reducing runtime from 49 to 48 seconds.
 
 ## Summary
 Here is a table listing the benchmark time in seconds and percent saving from the original time after the application of each step, for two datasets: the 12/30/19 dataset the improvements were designed around, and a larger set from 12/30/20.
@@ -215,9 +215,9 @@ This was the time spent loading and parsing the data files, which is unaffected 
 At the end, the data structure is about 3.6x more efficient than the baseline.
 The techniques and data structures used in this study are individually well known.
 This study combines them to optimize the order book data structure and compares their relative effectiveness. The result is a highly efficient general-purpose order book implementation.
-This is as far as I have gotten given the time I spent on this project.  There are obvious limitations of this work:
+This is as far as I have gotten given the time I spent on this project. There are obvious limitations to this work:
 - Benchmarking only uses limited historical data freely available from one stock exchange,
-- Benchmarking is done on total runtime of book building alone, not on real time latency of a full application.
+- Benchmarking is done on total runtime of book building alone, not on real-time latency of a full application.
 
 Nevertheless, I hope this work provides some useful data points to those working on more specific data and applications.
 I am open to other techniques that may further improve the order book's performance.
