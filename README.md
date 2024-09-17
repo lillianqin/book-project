@@ -24,11 +24,9 @@ Change above `debug` to `release` for release mode if you would like to enable c
 The objective of the repo is to optimize the OrderBook class, which can be benchmarked via running the program itchbook_printer.
 To measure the time of running itchbook_printer for a day of Nasdaq's raw data, build in release mode first, and then run the following command
 ```
-/opt/data/capwrapper chrt -f 1 taskset -c 2 /usr/bin/time ./build/release/itch50/itchbook_printer --printUpdate=false --printOther=false --date 20191230
+/usr/bin/time ./build/release/itch50/itchbook_printer --printUpdate=false --printOther=false --date 20191230
 ```
-The above command requires a utility named capwrapper and data file Nasdaq_itch.20191230.dat both under /opt/data.  The capwrapper utility and
-the chrt utility allow the program under test to run at a higher priority than regular user processes, so that the measurement is more consistent.
-The taskset utility pins the program to a particular core, also to improve the consistency.
+
 After some time, the command should print something like
 ```
 start=20191230 00:00:00.000000000 end=23:59:59.000000000
