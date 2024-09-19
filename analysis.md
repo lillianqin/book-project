@@ -111,8 +111,8 @@ A TLB miss occurs when the desired page is not found in the TLB.
 In that case, lookup is done on the page table and the newly-searched entry replaces a cached entry.
 The more memory a process uses at the same time, the more TLB misses occur. According to *perf stat*, there are currently around 1.46 billion misses when running the benchmark.
 Performance thus improves if more addresses can be covered by the same number of TLB entries, and the most obvious way is increasing page size from the standard 4KB to a “huge page” with a larger memory block.
-There are multiple ways to increase page size without changing any code, such as enabling Linux’s Transparent HugePage Support (detailed [here](https://linuxconfig.org/how-to-enable-hugepages-on-linux)).
-I chose to install Microsoft’s [mimalloc](https://github.com/microsoft/mimalloc) allocator since it is easier to configure.
+There are multiple ways to increase page size without changing any code, such as enabling Linux’s Transparent HugePage Support.
+I chose to install Microsoft’s [mimalloc](https://github.com/microsoft/mimalloc) allocator since it is easier to configure, and [explicitly allocated](https://linuxconfig.org/how-to-enable-hugepages-on-linux) 4GB of physical memory to be backed by huge pages.
 I enabled the *MIMALLOC_ALLOW_LARGE_OS_PAGES* option, which uses 2MB pages when available.
 There is also a 1GB option, though pages too large for the program’s needs may leave a lot of memory allocated but unused.
 After enabling large pages, the number of TLB misses is reduced to about 5.6 million and net book-building time from 146 to 122 seconds.
@@ -151,18 +151,20 @@ Net book-building time decreased from 100 to 87 seconds.
 Note that *Level*’s constructor automatically inserts it into a *Half* such that sorted order is maintained.
 *Half*’s insert method just iterates through the *LevelList*, making comparisons until the newly-created *Level*’s price is in-between two extant ones (or the end of the list is reached), which takes linear time.
 
-In this step, I added a [*tlx::btree_map*](https://tlx.github.io/index.html) from prices to levels (*LevelMap*) to each *Half*, reducing the insertion time to logarithmic.
+In this step, I added a [*tlx::btree_map*](https://tlx.github.io/index.html) from prices to levels (*LevelMap*) to each *Half*. 
+The worst-case runtime for inserting levels is reduced from O(n) from O(logn), while deletion is increased from O(1) to O(logn).
+However, the overall change is positive since insertion happens at least as much as deletion.
 Like binary search trees, B-trees are used for sorting, but can have multiple elements and branches per node and are self-balancing.
 B-trees also have better cache performance than binary trees: elements in one node are stored contiguously, so it is better in that regard to have more than two elements per node.
 One type of B-tree is a B+ tree, in which internal nodes store only keys and leaf nodes store only values.
 The leaf nodes connect to form a sorted linked list.
 As *tlx::btree_map* is a B+ tree, it can replace the *LevelList* entirely.
-After this change, benchmark time decreased to 56 seconds, down from 87.
+After this change, benchmark time decreased to 65 seconds, down from 87.
 
 ## Step 6: emhash7
 After Step 3, I learned that *absl::flat_hash_map* isn’t actually the fastest flat hash map implementation around.
 According to [Martin Ankerl’s benchmarking](https://martin.ankerl.com/2022/08/27/hashmap-bench-01/), one of the best maps for inserting and deleting numbers (the most frequent operations in *OrderBook*) is [*emhash7::HashMap*](https://github.com/ktprime/emhash), particularly when using the [*ankerl::unordered_dense::hash*](https://github.com/martinus/unordered_dense) or the mumx hash.
-I replaced the *flat_hash_maps* with this version, reducing time from 56 to 49 seconds.
+I replaced the *flat_hash_maps* with this version, reducing time from 65 to 49 seconds.
 
 ## Step 7: Branchless LevelCompare
 When code contains branches/conditional statements, the CPU will attempt to predict which branch is taken (ex. by frequency of each branch in the past), then fetch and speculatively execute the instructions that follow.
